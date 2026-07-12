@@ -32,13 +32,24 @@ def char_len(text: str) -> int:
     return len(text)
 
 
+def get_secret_api_key() -> str:
+    """Streamlit CloudのSecretsに ANTHROPIC_API_KEY があれば取得する。
+    ローカル実行などでsecrets.tomlが無い場合は空文字を返す(エラーにしない)。
+    """
+    try:
+        return st.secrets.get("ANTHROPIC_API_KEY", "")
+    except Exception:
+        return ""
+
+
 # ------------------------------------------------------------------
 # 初期化
 # ------------------------------------------------------------------
 if "settings" not in st.session_state:
     st.session_state.settings = load_settings()
 if "api_key" not in st.session_state:
-    st.session_state.api_key = ""
+    # Secretsに設定されていれば自動で使う。無ければ空欄(手入力を促す)
+    st.session_state.api_key = get_secret_api_key()
 if "post_results" not in st.session_state:
     st.session_state.post_results = None
 if "account_research" not in st.session_state:
@@ -76,12 +87,25 @@ def render_reply_cards(results: list[dict], mode: str, key_prefix: str) -> None:
 with st.sidebar:
     st.header("⚙️ 設定")
 
-    st.session_state.api_key = st.text_input(
-        "Anthropic APIキー",
-        value=st.session_state.api_key,
-        type="password",
-        help="このセッション内のみ保持されます。ファイルには保存されません。",
-    )
+    _using_secret_key = bool(get_secret_api_key()) and st.session_state.api_key == get_secret_api_key()
+    if _using_secret_key:
+        st.success("✅ APIキーはSecretsから自動設定済みです", icon="✅")
+        with st.expander("別のAPIキーに切り替える"):
+            override = st.text_input(
+                "Anthropic APIキー(上書き)",
+                value="",
+                type="password",
+                placeholder="別のキーを使う場合のみ入力",
+            )
+            if override:
+                st.session_state.api_key = override
+    else:
+        st.session_state.api_key = st.text_input(
+            "Anthropic APIキー",
+            value=st.session_state.api_key,
+            type="password",
+            help="このセッション内のみ保持されます。ファイルには保存されません。",
+        )
 
     st.divider()
     st.subheader("📝 自分(子だくさんナース)の過去の投稿")
