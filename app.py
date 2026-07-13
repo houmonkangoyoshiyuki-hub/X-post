@@ -14,6 +14,7 @@ from api_client import ReplyGenerationError, generate_replies, research_account
 from persona_engine import (
     build_account_reply_prompt,
     build_account_research_prompt,
+    build_scribble_prompt,
     build_system_prompt,
     build_user_prompt,
 )
@@ -54,6 +55,8 @@ if "post_results" not in st.session_state:
     st.session_state.post_results = None
 if "account_research" not in st.session_state:
     st.session_state.account_research = None
+if "scribble_results" not in st.session_state:
+    st.session_state.scribble_results = None
 if "account_results" not in st.session_state:
     st.session_state.account_results = None
 
@@ -150,7 +153,9 @@ with st.sidebar:
 st.title("🩺 子だくさんナース 返信ジェネレーター")
 st.caption("@papa_mikaiketsu のキャラクターに合わせた返信リプライを生成します")
 
-tab_post, tab_account = st.tabs(["📩 投稿文から返信を作る", "🔎 アカウントから探す"])
+tab_post, tab_account, tab_scribble = st.tabs(
+    ["📩 投稿文から返信を作る", "🔎 アカウントから探す", "✍️ キーワードから投稿を作る"]
+)
 
 # ==================== タブ1: 投稿文から返信を作る(既存機能) ====================
 with tab_post:
@@ -343,4 +348,78 @@ with tab_account:
         )
         if st.button("結果をクリア", key="clear_account"):
             st.session_state.account_results = None
+            st.rerun()
+
+# ==================== タブ3: キーワードから投稿を作る(新機能) ====================
+with tab_scribble:
+    st.info(
+        "単語の羅列や殴り書きのメモを貼ると、伝えたいことの核はそのままに、"
+        "子だくさんナースの声で1つの投稿(リプライではなく独立したポスト)に整えます。",
+        icon="ℹ️",
+    )
+
+    col_left3, col_right3 = st.columns([3, 2])
+
+    with col_left3:
+        raw_text = st.text_area(
+            "✍️ キーワード・殴り書きメモ",
+            height=150,
+            placeholder="例: 子育て しんどい 誰にも言えない 夜中 涙\nのような単語の羅列でも、雑な走り書きの文章でもOKです",
+            key="scribble_raw",
+        )
+        additional_instruction_scr = st.text_input(
+            "➕ 追加指示(任意)",
+            placeholder="例:もっと短く / 疲れが伝わるように",
+            key="scribble_extra",
+        )
+
+    with col_right3:
+        mode_label_scr = st.radio(
+            "📏 投稿長モード",
+            options=["Free(280文字以内)", "Premium(長文・深い寄り添い)"],
+            key="scribble_mode",
+        )
+        mode_scr = "free" if mode_label_scr.startswith("Free") else "premium"
+        num_variants_scr = st.slider("生成する案の数", min_value=2, max_value=3, value=3, key="scribble_num")
+
+    st.divider()
+    generate_scribble_clicked = st.button(
+        "✨ 投稿文に整える", type="primary", use_container_width=True
+    )
+
+    if generate_scribble_clicked:
+        if not raw_text.strip():
+            st.error("キーワードやメモを入力してください。")
+        elif not st.session_state.api_key:
+            st.error("サイドバーからAnthropic APIキーを入力してください。")
+        else:
+            with st.spinner("メモを投稿文に整えています…"):
+                try:
+                    system_prompt = build_system_prompt(mode_scr, additional_instruction_scr)
+                    user_prompt = build_scribble_prompt(
+                        raw_text, st.session_state.settings.get("past_posts", []), num_variants_scr
+                    )
+                    results = generate_replies(st.session_state.api_key, system_prompt, user_prompt)
+                    st.session_state.scribble_results = results
+                    st.session_state.scribble_mode_used = mode_scr
+                    append_history(
+                        {
+                            "kind": "scribble",
+                            "target_post": raw_text,
+                            "mode": mode_scr,
+                            "additional_instruction": additional_instruction_scr,
+                            "results": results,
+                        }
+                    )
+                except ReplyGenerationError as e:
+                    st.error(str(e))
+                    st.session_state.scribble_results = None
+
+    if st.session_state.scribble_results:
+        st.subheader("💬 整えた投稿案")
+        render_reply_cards(
+            st.session_state.scribble_results, st.session_state.get("scribble_mode_used", "free"), "scribble"
+        )
+        if st.button("結果をクリア", key="clear_scribble"):
+            st.session_state.scribble_results = None
             st.rerun()
