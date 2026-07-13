@@ -275,3 +275,4 @@ def build_scribble_prompt(raw_text: str, past_posts: list[str], num_variants: in
   {{"reply": "投稿文3", "reason": "..."}}
 ]
 """
+
