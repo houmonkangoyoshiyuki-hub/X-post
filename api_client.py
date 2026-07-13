@@ -7,8 +7,9 @@ import re
 
 import anthropic
 
-# 使用モデル。必要に応じて変更可能。
-MODEL_NAME = "claude-sonnet-5"
+# 使用モデル。コスト最優先で最安クラスのHaikuを使用。
+# 品質に不満が出た場合は "claude-sonnet-5" に変更可能。
+MODEL_NAME = "claude-haiku-4-5-20251001"
 
 
 class ReplyGenerationError(Exception):
